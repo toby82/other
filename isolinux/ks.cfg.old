@@ -1,0 +1,209 @@
+#version=RHEL7
+# System authorization information
+auth --enableshadow --passalgo=sha512
+
+# Use CDROM installation media
+cdrom
+# Use graphical install
+#graphical
+text
+skipx
+# Run the Setup Agent on first boot
+firstboot --disable
+firewall --disabled
+selinux --disabled
+ignoredisk --only-use=sda
+timezone --utc Asia/Shanghai
+# Keyboard layouts
+keyboard us
+# System language
+lang en_US.UTF-8
+
+# Network information
+#network  --bootproto=static --device=eno16777984 --gateway=172.16.70.1 --ip=172.16.70.200 --nameserver=61.139.2.69 --netmask=255.255.255.0 --onboot=off --ipv6=auto
+#network  --bootproto=dhcp --device=eno33557248 --onboot=off --ipv6=auto
+#network  --bootproto=dhcp --device=eno50336512 --onboot=off --ipv6=auto
+network  --hostname=localhost.chinacloud.com.cn
+# Root password
+rootpw --iscrypted $6$u9ZoJrdd5sPTEvuW$CAnqOyGWxXLXqflr1fUKEtVvVrGDiMYlbekSwV3k.JeG7OqU/FxePYy8VgFhmw9A0YUfFXLJSXUa0s64riqMY/
+# System timezone
+timezone Asia/Shanghai --isUtc
+# System bootloader configuration
+bootloader --append=" crashkernel=auto" --location=mbr --boot-drive=sda
+#autopart --type=lvm
+zerombr 
+# Partition clearing information
+clearpart --all --initlabel  --drives=sda
+# PV
+part biosboot    --fstype=biosboot --size=1
+part /boot       --size=500    --fstype=ext4     --ondisk=sda 
+#part pv.201      --size=204800 --maxsize=512000  --ondisk=sda
+part pv.202      --size=1      --grow            --ondisk=sda
+# VG
+#volgroup vg_os   --pesize=4096 pv.201
+volgroup vg_data --pesize=4096 pv.202
+# LV
+logvol swap   --name=lv_swap --vgname=vg_data   --fstype="swap" --size=8192 --maxsize=32784
+logvol /      --name=root    --vgname=vg_data   --fstype="ext4" --percent=30
+logvol /datas --name=lvdata  --vgname=vg_data   --fstype="xfs"  --size=1    --grow
+
+reboot
+%packages
+@base
+ntpdate
+cairo
+vim-enhanced
+yum-utils
+python-pip
+python-pbr
+python-mako
+ocfs2-tools
+curl
+wget
+kexec-tools
+net-tools
+epel-release
+rdo-release-juno-1
+salt-minion
+salt-master
+lighttpd
+%end
+
+#%addon com_redhat_kdump --enable --reserve-mb='auto'
+
+#%end
+
+
+%post 
+mkdir -p /var/log/deploy
+mkdir -p /opt/software/network_tool
+mkdir -p /opt/software/other
+systemctl stop NetworkManager
+systemctl disable NetworkManager
+systemctl disable firewalld
+systemctl disable salt-master
+systemctl disable salt-minion
+systemctl enable lighttpd
+mkdir -p /yum_repo/pulsar2.0
+mkdir -p /srv
+
+echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
+echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.conf
+echo "net.core.netdev_max_backlog = 262144" >> /etc/sysctl.conf
+echo "net.core.somaxconn = 4096"  >> /etc/sysctl.conf
+echo "net.ipv4.tcp_max_orphans = 327680"  >> /etc/sysctl.conf
+echo "net.ipv4.tcp_max_syn_backlog = 262144" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_timestamps = 0" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_synack_retries = 1" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_syn_retries = 1" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_tw_reuse = 1" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_fin_timeout = 1" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_keepalive_time = 120" >> /etc/sysctl.conf
+echo "net.ipv4.ip_local_port_range = 32768   65000" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_max_syn_backlog = 8192" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_rmem = 4096 4096 16777216" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_wmem = 4096 4096 16777216" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_mem = 94500000 915000000 927000000" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_sack = 0" >> /etc/sysctl.conf
+echo "fs.file-max = 1300000" >> /etc/sysctl.conf
+echo "net.ipv4.ip_nonlocal_bind = 1" >>  /etc/sysctl.conf
+echo "kernel.softlockup_panic = 1" >> /etc/sysctl.conf
+echo "kernel.panic = 30" >> /etc/sysctl.conf
+sysctl -p
+mkdir -p /etc/yum.repos.d/useless
+mv /etc/yum.repos.d/*.repo /etc/yum.repos.d/useless
+
+#stop Ctrl+Alt+Del
+sed -i "s/exec .*/#exec \/sbin\/shutdown -r now s\"Control-Alt-Delete pressed\"/g" /etc/init/control-alt-delete.conf
+
+#change ssh_config
+#sed -i "s/#UseDNS yes/UseDNS no/g" /etc/ssh/sshd_config
+#sed -i "s/^GSSAPICleanupCredentials yes/GSSAPICleanupCredentials no/g" /etc/ssh/sshd_config
+#sed -i "s/^GSSAPIAuthentication yes/GSSAPIAuthentication no/g" /etc/ssh/sshd_config
+
+
+sed -i "s#HISTSIZE=1000#HISTSIZE=10000#g" /etc/profile
+echo "HISTTIMEFORMAT=\"%Y-%m-%d %H:%M:%S \`whoami\` : \"" >>/etc/profile
+
+echo "bash /opt/software/network_tool/run.sh" >> /etc/profile 
+echo -ne "
+* soft nofile 65536
+* hard nofile 65536
+">>/etc/security/limits.conf
+
+cat <<EOF >> /etc/yum.repos.d/local.repo
+[localpackages]
+name=local packages
+baseurl=file:///yum_repo/pulsar2.0/Packages/
+enabled=1
+gpgcheck=0
+EOF
+%end
+
+%post --nochroot --log=/mnt/sysimage/var/log/deploy/01_ks_nochroot_post.log 
+
+cp -prf /run/install/repo/qemu /mnt/sysimage/usr/local/ >/dev/null
+cp -prf /run/install/repo/ironic_images /mnt/sysimage/opt/software/ >/dev/null
+cp -prf /run/install/repo/cml /mnt/sysimage/opt/software/ >/dev/null
+cp -prf /run/install/repo/network_tool/* /mnt/sysimage/opt/software/network_tool >/dev/null
+cp -prf /run/install/repo/other/id_* /mnt/sysimage/opt/software/other >/dev/null
+cp -prf /run/install/repo/other/uploadironic.sh /mnt/sysimage/opt/software/other >/dev/null
+cp -prf /run/install/repo/Packages /mnt/sysimage/yum_repo/pulsar2.0 >/dev/null
+cp -prf /run/install/repo/other/lighttpd.conf /mnt/sysimage/etc/lighttpd >/dev/null
+cp -prf /run/install/repo/other/dirlisting.conf /mnt/sysimage/etc/lighttpd/conf.d >/dev/null
+cp -prf /run/install/repo/other/master /mnt/sysimage/etc/salt >/dev/null
+cp -prf /run/install/repo/other/minion /mnt/sysimage/etc/salt >/dev/null
+cp -prf /run/install/repo/other/salt.tar.gz /mnt/sysimage/opt/software/other >/dev/null
+cd /mnt/sysimage/opt/software/other && tar -xvf salt.tar.gz -C /mnt/sysimage/tmp && mv /mnt/sysimage/tmp/salt/* /mnt/sysimage/srv
+cp -prf /run/install/repo/other/html.tar.gz /mnt/sysimage/srv/salt/nebula4j/files/nebula4j-frontend >/dev/null
+cp -prf /run/install/repo/other/nebula4j-web.war /mnt/sysimage/srv/salt/nebula4j/files/nebula4j-backend >/dev/null
+%end
+
+%post
+username=root
+mkdir /${username}/.ssh && chmod 700 /${username}/.ssh
+cp -p /opt/software/other/id_rsa* /${username}/.ssh && chmod 400 /${username}/.ssh/id_rsa
+cat /opt/software/other/id_rsa.pub > /${username}/.ssh/authorized_keys && chmod 600 /${username}/.ssh/authorized_keys
+filepath="/${username}/.ssh/config"
+cat <<EOF > "${filepath}"
+StrictHostKeyChecking no
+UserKnownHostsFile /dev/null
+EOF
+chown -R ${username}:${username} /${username}/.ssh
+
+# Fixed: Run the command 'salt "*" xxx' causing bug "KeyError: 'xstatic'",  after fininshed deploying RDO.
+cd /usr/lib/python2.7/site-packages
+/bin/rm -f ./pkg_resources.pyc
+/bin/rm -f ./pkg_resources.pyo
+cat <<EOF > "./pkg_resources.py.patch"
+--- pkg_resources.py	2015-09-10 14:26:24.410037018 +0800
++++ pkg_resources.py.fixed	2015-09-10 14:34:30.380760419 +0800
+@@ -2080,8 +2080,12 @@
+                 __import__(parent)
+             try:
+                 path = sys.modules[parent].__path__
++            # Fixed: Run the command 'salt "*" xxx' causing bug "KeyError: 'xstatic'",  after fininshed deploying RDO.
++            except Exception:
++                pass
+             except AttributeError:
+-                raise TypeError("Not a package:", parent)
++                #raise TypeError("Not a package:", parent)
++                pass
+ 
+         # Track what packages are namespaces, so when new path items are added,
+         # they can be updated
+EOF
+patch -p0 < ./pkg_resources.py.patch
+
+
+
+%end
+
+%post --log=/var/log/deploy/01_ks_ntpdate.log
+ntpdate 0.asia.pool.ntp.org
+ntpdate 1.cn.pool.ntp.org
+ntpdate 202.118.1.130
+%end
+
